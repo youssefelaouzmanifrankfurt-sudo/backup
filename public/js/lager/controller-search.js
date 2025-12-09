@@ -1,21 +1,24 @@
 // public/js/lager/controller-search.js
-console.log("🔎 CONTROLLER-SEARCH GELADEN (V6.3 - Architect Fix applied)");
+console.log("🔎 CONTROLLER-SEARCH GELADEN (V12 - Dual Render Fix)");
 
-// --- SUCHE STARTEN ---
+// --- SUCHE STARTEN (Aus dem Modal) ---
 window.startPriceSearch = function() {
     const socket = window.socket;
     if (!socket) return window.showToast ? window.showToast("Keine Verbindung!", "error") : alert("Kein Socket!");
     
     const query = document.getElementById('inp-title').value;
-    if(!query || query.length < 2) return; 
+    if(!query || query.length < 2) {
+        if(window.showToast) window.showToast("Bitte Titel eingeben", "warning");
+        return; 
+    }
 
-    const list = document.getElementById('price-results');
+    // Spinner im MODAL anzeigen (da wir von dort kommen)
+    const list = document.getElementById('modal-price-results');
     if(list) {
         list.style.display = 'block';
-        list.innerHTML = `<div style="padding:20px; text-align:center; color:#94a3b8;"><div class="spinner"></div><br>Durchsuche Händler...</div>`;
+        list.innerHTML = `<div style="padding:20px; text-align:center; color:#94a3b8;"><div class="spinner"></div><br>Durchsuche Händler nach "${query}"...</div>`;
     }
     
-    // Globale Suche triggern
     console.log("🔍 Sende Suchanfrage:", query);
     socket.emit('search-external', { query: query, source: 'All' });
 };
@@ -28,12 +31,29 @@ window.findSets = function() {
      }
 };
 
-// --- ERGEBNISSE RENDERN ---
+// --- ERGEBNISSE RENDERN (Smart Switch) ---
 window.renderSearchResultsFromSocket = function(results) {
-    console.log("💰 Search Render aufgerufen. Ergebnisse:", results ? results.length : 0);
-    const list = document.getElementById('price-results');
+    console.log("💰 Search Render. Ergebnisse:", results ? results.length : 0);
+
+    // 1. ZIEL BESTIMMEN
+    // Wir prüfen, ob das Modal offen ist. Wenn ja, rendern wir DORT.
+    // Wenn nein, rendern wir im Scan-Tab (Fallback).
+    
+    let list = null;
+    const modal = document.getElementById('item-modal');
+    
+    if (modal && modal.classList.contains('active')) {
+        // Modal ist offen -> Priorität!
+        list = document.getElementById('modal-price-results');
+    } 
+    
+    if (!list) {
+        // Modal zu oder nicht gefunden -> Versuche Scan-Tab
+        list = document.getElementById('price-results');
+    }
+
     if(!list) {
-        console.warn("⚠️ Element #price-results nicht gefunden!");
+        console.warn("⚠️ Kein Container für Suchergebnisse gefunden!");
         return;
     }
 
@@ -48,7 +68,6 @@ window.renderSearchResultsFromSocket = function(results) {
     let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
     
     results.forEach(res => {
-        // Strings sicher machen für HTML Attribute
         const safeTitle = (res.title || "").replace(/'/g, "\\'").replace(/"/g, '&quot;');
         const safeUrl = (res.link || res.url || "#").replace(/'/g, "\\'");
         const safeImg = (res.image || res.img || "").replace(/'/g, "\\'");
@@ -99,62 +118,49 @@ window.watchResult = function(source, priceStr, url) {
     if(window.showToast) window.showToast(`"${source}" beobachtet`, 'success');
 };
 
-// 45% REGEL HIER IMPLEMENTIERT
+// 45% REGEL
 window.adoptResult = function(title, priceStr, url, source, img) {
-    // 1. Titel setzen
     if(title) document.getElementById('inp-title').value = title;
     
-    // 2. Preis parsen (Deutsch 1.000,00 -> Float 1000.00)
     let marketPrice = parsePrice(priceStr);
     
-    // 3. Marktpreis & EK setzen
     if(marketPrice > 0) {
         document.getElementById('inp-market-price').value = marketPrice.toFixed(2);
-        
-        // AUTOMATISCH 45% BERECHNEN
         const ek = marketPrice * 0.45;
         document.getElementById('inp-price').value = ek.toFixed(2);
-        
-        console.log(`💰 Adopt: Markt ${marketPrice}€ -> EK (45%) ${ek.toFixed(2)}€`);
     }
 
-    // 4. Metadaten
     if(img) document.getElementById('inp-image').value = img;
     document.getElementById('inp-source-url').value = url;
     document.getElementById('inp-source-name').value = source;
 
-    // 5. Zur Watchlist hinzufügen (damit man Preisupdates bekommt)
     addCompetitorToWatchlist(source, marketPrice, url);
     
-    // 6. UI Updates
     if(window.calcProfit) window.calcProfit();
     
-    // Ergebnisse ausblenden für bessere Übersicht
-    const list = document.getElementById('price-results');
-    if(list) list.style.display = 'none';
+    // Ergebnisse ausblenden (in beiden möglichen Containern)
+    const list1 = document.getElementById('modal-price-results');
+    const list2 = document.getElementById('price-results');
+    if(list1) list1.style.display = 'none';
+    if(list2) list2.style.display = 'none';
     
     if(window.showToast) window.showToast("Daten übernommen & EK (45%) berechnet", "success");
 };
 
 // --- HELPER ---
 
-// Robuster Parser für deutsche Preise (1.299,00 € -> 1299.00)
 function parsePrice(priceStr) {
     if (typeof priceStr === 'number') return priceStr;
     if (!priceStr) return 0;
-    // Entfernt Tausenderpunkte, ersetzt Komma durch Punkt, entfernt alles außer Zahlen/Punkt
     return parseFloat(priceStr.replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '')) || 0;
 }
 
 function addCompetitorToWatchlist(name, price, url) {
     if(!window.tempCompetitors) window.tempCompetitors = [];
-    
-    // Vermeide Duplikate
     const exists = window.tempCompetitors.find(c => c.url === url);
     if(!exists) {
         window.tempCompetitors.push({ name, price, url, lastCheck: new Date() });
     }
-    
     if(window.renderCompetitorList) window.renderCompetitorList(window.tempCompetitors);
 }
 
@@ -185,6 +191,5 @@ window.calcProfit = function() {
     }
 };
 
-// --- WICHTIGER FIX: Globalen Alias überschreiben ---
-// Damit main.js weiß, dass es DIESE Funktion zum Rendern nutzen soll
+// WICHTIG: Globalen Alias setzen
 window.renderPriceResults = window.renderSearchResultsFromSocket;

@@ -7,7 +7,7 @@
         
         <div class="modal-body">
             <input type="hidden" id="edit-id">
-            
+             
             <div class="form-group" style="margin-bottom:15px;">
                 <label class="form-label" style="display:block; color:#94a3b8; margin-bottom:5px;">Produktname *</label>
                 <div style="display:flex; gap:10px;">
@@ -22,7 +22,7 @@
                 <div id="suggestion-chips" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px;"></div>
             </div>
 
-            <div id="price-results" style="display:none; margin-bottom:15px; max-height:200px; overflow-y:auto; border:1px solid #334155; border-radius:8px; padding:10px; background:#0f172a;"></div>
+            <div id="modal-price-results" style="display:none; margin-bottom:15px; max-height:200px; overflow-y:auto; border:1px solid #334155; border-radius:8px; padding:10px; background:#0f172a;"></div>
 
             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; margin-bottom:15px;">
                 <div class="form-group">
@@ -88,27 +88,18 @@
 <div id="qr-scanner-modal" class="modal-overlay" style="z-index: 3000;">
     <div class="modal-box" style="max-width: 500px; text-align: center;">
         <h2 style="margin-top:0; color:white;">📷 Scanner</h2>
-        
         <div id="reader" style="width: 100%; min-height:300px; background:#000; border-radius:8px; overflow:hidden; margin-bottom:15px;"></div>
-        
         <div style="margin-top:20px; border-top:1px solid #334155; padding-top:15px;">
             <label style="display:block; margin-bottom:5px; color:#94a3b8;">Manueller Code:</label>
             <div style="display:flex; gap:10px;">
-                <input type="text" id="manual-code-input" class="form-input" placeholder="Code tippen..." 
-                       style="flex:1; padding:10px; background:#0f172a; border:1px solid #334155; color:white; border-radius:8px;">
+                <input type="text" id="manual-code-input" class="form-input" placeholder="Code tippen..." style="flex:1; padding:10px; background:#0f172a; border:1px solid #334155; color:white; border-radius:8px;">
                 <button onclick="window.triggerManualScan()" class="btn-primary" style="padding:10px; background:#3b82f6; border:none; border-radius:8px; color:white;">OK</button>
             </div>
         </div>
-
         <div style="margin-top:15px; display:flex; flex-direction:column; gap:10px;">
-            <button onclick="window.triggerCamera()" class="btn-secondary" style="background:#475569; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;">
-                📸 Foto-Scan (OCR)
-            </button>
+            <button onclick="window.triggerCamera()" class="btn-secondary" style="background:#475569; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;">📸 Foto-Scan (OCR)</button>
             <input type="file" id="cam-input" accept="image/*" capture="environment" style="display:none;" onchange="window.handleImageCrop(this)">
-            
-            <button onclick="window.stopQRScanner()" class="btn-mini" style="background:#ef4444; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;">
-                Schließen
-            </button>
+            <button onclick="window.stopQRScanner()" class="btn-mini" style="background:#ef4444; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;">Schließen</button>
         </div>
     </div>
 </div>
@@ -117,31 +108,21 @@
     <div class="modal-box">
         <h2 style="margin-top:0; color:white;">Artikel verknüpfen</h2>
         <input type="hidden" id="match-stock-id">
-        
         <div style="display:flex; gap:10px; margin-bottom:15px;">
-            <input type="text" id="match-search-inp" class="form-input" placeholder="Suche in Datenbank..." 
-                   style="flex:1; padding:10px; background:#0f172a; border:1px solid #334155; color:white; border-radius:8px;">
-            <button onclick="window.searchForMatch()" class="btn-secondary" style="background:#3b82f6; color:white; border:none; border-radius:8px; padding:0 20px; cursor:pointer;">
-                Suchen
-            </button>
+            <input type="text" id="match-search-inp" class="form-input" placeholder="Suche in Datenbank..." style="flex:1; padding:10px; background:#0f172a; border:1px solid #334155; color:white; border-radius:8px;">
+            <button onclick="window.searchForMatch()" class="btn-secondary" style="background:#3b82f6; color:white; border:none; border-radius:8px; padding:0 20px; cursor:pointer;">Suchen</button>
         </div>
-        
         <div id="match-list" style="max-height:300px; overflow-y:auto; background:#0f172a; border-radius:8px; padding:10px;"></div>
-        
-        <button onclick="window.closeAllModals()" class="btn-mini" style="width:100%; margin-top:15px; background:#334155; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;">
-            Abbrechen
-        </button>
+        <button onclick="window.closeAllModals()" class="btn-mini" style="width:100%; margin-top:15px; background:#334155; color:white; border:none; padding:12px; border-radius:8px; cursor:pointer;">Abbrechen</button>
     </div>
 </div>
 
 <div id="crop-modal" class="modal-overlay" style="z-index: 3100;">
     <div class="modal-box" style="max-width:90vw; max-height:90vh; display:flex; flex-direction:column;">
         <h2 style="margin-top:0; color:white;">Bild zuschneiden</h2>
-        
         <div style="flex:1; background:#000; overflow:hidden; border-radius:8px; margin-bottom:15px; min-height:300px;">
             <img id="image-to-crop" style="max-width:100%; max-height:100%; display:block;">
         </div>
-        
         <div style="text-align:right; display:flex; justify-content:end; gap:10px;">
             <button onclick="window.closeAllModals()" class="btn-mini" style="background:#334155; color:white; border:none; padding:12px 20px; border-radius:8px; cursor:pointer;">Abbruch</button>
             <button id="btn-ocr" onclick="window.performOCR()" class="btn-primary" style="background:#3b82f6; color:white; border:none; padding:12px 20px; border-radius:8px; cursor:pointer;">Text scannen</button>
@@ -152,13 +133,11 @@
 <div id="print-modal" class="modal-overlay" style="z-index: 3000;">
     <div class="modal-box" style="width:300px; background:white; color:black;">
         <h2 style="margin-top:0; color:black;">Etikett drucken</h2>
-        
         <div id="print-area" style="border:1px dashed #ccc; padding:10px; margin-bottom:15px; text-align:center;">
             <img id="print-qr" style="width:100px; height:100px;">
             <div id="print-title" style="font-weight:bold; margin:5px 0;"></div>
             <div id="print-sku" style="font-family:monospace;"></div>
         </div>
-        
         <div style="display:flex; flex-direction:column; gap:10px;">
             <button onclick="window.printLabel()" class="btn-primary" style="background:black; color:white; border:none; padding:10px; border-radius:5px; cursor:pointer;">🖨️ Drucken</button>
             <button onclick="window.closeAllModals()" class="btn-mini" style="background:#eee; color:black; border:none; padding:10px; border-radius:5px; cursor:pointer;">Schließen</button>
