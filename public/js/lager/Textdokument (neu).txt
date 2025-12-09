@@ -1,0 +1,27 @@
+// public/js/lager/controller-scan.js
+console.log("📷 CONTROLLER-SCAN GELADEN");
+
+window.triggerManualScan = function() {
+     if (!window.socket) return;
+     const code = document.getElementById('manual-code-input').value;
+     if(code) {
+         console.log("📷 Scan: Manueller Code", code);
+         window.socket.emit('check-scan', code);
+     }
+};
+
+window.filterStock = function() {
+    // Einfache Client-Side Suche
+    const term = document.getElementById('inp-search').value.toLowerCase();
+    if(!window.lastStockItems) return;
+
+    const filtered = window.lastStockItems.filter(item => 
+        (item.title && item.title.toLowerCase().includes(term)) ||
+        (item.sku && item.sku.toLowerCase().includes(term)) ||
+        (item.location && item.location.toLowerCase().includes(term))
+    );
+    
+    if(typeof window.renderStock === 'function') {
+        window.renderStock(filtered);
+    }
+};
