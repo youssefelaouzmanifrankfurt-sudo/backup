@@ -1,117 +1,100 @@
 // public/js/lager/scanner.js
-window.html5QrCode = null;
+console.log("📷 Scanner-Modul geladen (V2.0 - Hardware Driver)");
 
-// --- KAMERA / FOTO SCAN (OCR) ---
-window.triggerCamera = () => {
-    // Klickt auf den versteckten File-Input
-    // WICHTIG: Der Input im HTML muss capture="environment" haben!
-    const inp = document.getElementById('cam-input');
-    if(inp) inp.click();
-};
+window.ScannerModule = {
+    html5QrCode: null,
+    isRunning: false,
+    activeElementId: null,
 
-window.startCropping = (inp) => {
-    if(inp.files[0]) {
-        const r = new FileReader();
-        r.onload = (e) => {
-            const imgEl = document.getElementById('image-to-crop');
-            if(!imgEl) return;
-            
-            imgEl.src = e.target.result;
-            document.getElementById('crop-modal').classList.add('active'); // 'active' statt 'open' für Konsistenz
-            
-            if(window.cropper) window.cropper.destroy();
-            // Quadratischer Crop oder Free? Hier Free (NaN)
-            window.cropper = new Cropper(imgEl, { viewMode:1, autoCropArea: 1 });
-        };
-        r.readAsDataURL(inp.files[0]);
-    }
-    inp.value='';
-};
+    // Prüft, ob Kamera verfügbar ist
+    checkSupport: function() {
+        if (typeof Html5Qrcode === 'undefined') {
+            console.error("❌ Html5Qrcode Bibliothek fehlt! Bitte in EJS einbinden.");
+            return false;
+        }
+        return true;
+    },
 
-window.performOCR = () => {
-    if(!window.cropper) return;
-    const btn = document.getElementById('btn-ocr'); 
-    const originalText = btn ? btn.innerText : "Scan";
-    if(btn) btn.innerText = "⏳ Analysiere...";
-    
-    window.cropper.getCroppedCanvas().toBlob(async(b) => {
-        const fd = new FormData(); 
-        fd.append('image', b, 's.jpg');
-        try {
-            const r = await fetch('/api/scan-image', {method:'POST', body:fd});
-            const d = await r.json();
-            if(d.success) {
-                if(window.socket) window.socket.emit('check-scan', d.model); 
-            } else {
-                alert("Text konnte nicht erkannt werden.");
-            }
-        } catch(e){ console.error(e); }
+    startCamera: async function(elementId, onScanSuccess) {
+        if (!this.checkSupport()) return;
         
-        if(window.closeAllModals) window.closeAllModals();
-        if(btn) btn.innerText = originalText;
-    }, 'image/jpeg');
-};
+        // Verhindern, dass wir 2x starten
+        if (this.isRunning) {
+            console.log("⚠️ Scanner läuft bereits.");
+            return;
+        }
 
-window.triggerManualScan = () => {
-    const val = document.getElementById('manual-code-input').value;
-    if(val && window.socket) { 
-        window.socket.emit('check-scan', val); 
-        document.getElementById('manual-code-input').value = ""; 
-    }
-};
+        const element = document.getElementById(elementId);
+        if (!element) {
+            console.warn(`⚠️ Scanner-Container #${elementId} nicht gefunden.`);
+            return;
+        }
 
-// --- QR CODE SCANNER (Handy Optimiert) ---
-window.startQRScanner = async () => {
-    const modal = document.getElementById('qr-scanner-modal');
-    if(modal) modal.classList.add('active'); // Konsistente Klasse 'active' nutzen
-    
-    // Stoppe vorherige Instanzen falls vorhanden
-    if(window.html5QrCode) {
-        try { await window.html5QrCode.stop(); } catch(e){}
-    }
+        this.activeElementId = elementId;
+        this.html5QrCode = new Html5Qrcode(elementId);
+        
+        // Config für Performance
+        const config = { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+        };
+        
+        try {
+            // "environment" = Rückkamera
+            await this.html5QrCode.start(
+                { facingMode: "environment" }, 
+                config, 
+                (decodedText) => {
+                    // Erfolgreicher Scan
+                    console.log(`✅ RAW SCAN: ${decodedText}`);
+                    this.playSound();
+                    if(onScanSuccess) onScanSuccess(decodedText);
+                },
+                (errorMessage) => {
+                    // Fehler beim Frame-Read sind normal, ignorieren wir.
+                }
+            );
+            
+            this.isRunning = true;
+            element.classList.add('camera-active'); // Für CSS Styling
+            console.log("✅ Kamera erfolgreich gestartet.");
 
-    // Erstelle neue Instanz (nutzt ID "reader")
-    window.html5QrCode = new Html5Qrcode("reader");
-    
-    const config = { 
-        fps: 10, 
-        qrbox: { width: 250, height: 250 }, // Quadratisch für Handy
-        aspectRatio: 1.0 
-    };
+        } catch (err) {
+            console.error("❌ Kamera Start Fehler:", err);
+            if(window.showToast) window.showToast("Kamera-Zugriff verweigert oder HTTPS fehlt.", "error");
+            this.stopCamera();
+        }
+    },
 
-    // start() mit facingMode "environment" erzwingt Rückkamera
-    try {
-        await window.html5QrCode.start(
-            { facingMode: "environment" }, 
-            config,
-            (decodedText) => {
-                // Erfolg
-                console.log("QR Scan:", decodedText);
-                if(window.socket) window.socket.emit('check-scan', decodedText);
-                
-                // Audio Feedback
-                const audio = new Audio('/sounds/notification.mp3');
-                audio.play().catch(e => {});
+    stopCamera: async function() {
+        if (!this.html5QrCode) return;
 
-                window.stopQRScanner();
-            },
-            (errorMessage) => {
-                // Ignorieren (Scanning process)
+        try {
+            if(this.isRunning) {
+                await this.html5QrCode.stop();
             }
-        );
-    } catch (err) {
-        console.error("Kamera Error:", err);
-        alert("Kamera konnte nicht gestartet werden. Bitte Berechtigung prüfen.\n" + err);
-        window.stopQRScanner();
-    }
-};
+            this.html5QrCode.clear();
+            this.isRunning = false;
+            console.log("🛑 Kamera gestoppt.");
+            
+            if(this.activeElementId) {
+                const el = document.getElementById(this.activeElementId);
+                if(el) {
+                    el.classList.remove('camera-active');
+                    el.innerHTML = ""; // Canvas Reste entfernen
+                }
+            }
+        } catch (err) {
+            console.error("Fehler beim Stoppen:", err);
+        }
+        this.html5QrCode = null;
+    },
 
-window.stopQRScanner = () => {
-    if(window.html5QrCode) {
-        window.html5QrCode.stop().then(() => {
-            window.html5QrCode.clear();
-        }).catch(err => console.log("Stop error:", err));
+    playSound: function() {
+        const audio = new Audio('/sounds/notification.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(e => {}); // Fehler ignorieren, wenn User noch nicht interagiert hat
+        if (navigator.vibrate) navigator.vibrate(100);
     }
-    const modal = document.getElementById('qr-scanner-modal');
-    if(modal) modal.classList.remove('active');
 };

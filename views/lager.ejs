@@ -3,30 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Lagerbestand | LagerModul</title>
+    <title>Lager & Terminal V11</title>
     
     <link rel="stylesheet" href="/css/nav.css">
     <link rel="stylesheet" href="/css/lager.css">
     <link rel="stylesheet" href="/css/lager_styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
-    
-    <style>
-        /* Spezifische Styles für die Scan-Leiste */
-        .scan-controls { background:#1e293b; padding:15px; border-radius:10px; border:1px solid #334155; margin-bottom: 20px; }
-        .mode-btn { flex:1; padding:10px; border:1px solid #475569; background:#0f172a; color:#94a3b8; cursor:pointer; transition:all 0.2s; font-weight:600; font-size: 0.9rem; }
-        .mode-btn.active { background:#3b82f6; color:white; border-color:#3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.5); }
-        .mode-btn:first-child { border-radius: 6px 0 0 6px; }
-        .mode-btn:last-child { border-radius: 0 6px 6px 0; }
-        
-        .mode-btn-sell.active { background:#ef4444; border-color:#ef4444; box-shadow: 0 0 10px rgba(239,68,68,0.5); }
-        .mode-btn-inv.active { background:#10b981; border-color:#10b981; box-shadow: 0 0 10px rgba(16,185,129,0.5); }
-        .mode-btn-add.active { background:#f59e0b; border-color:#f59e0b; box-shadow: 0 0 10px rgba(245,158,11,0.5); }
 
-        /* Verkauf Modal Styles */
-        #sell-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; }
-        #sell-modal.active { display:flex; }
-        .sell-box { background:#1e293b; padding:30px; border-radius:12px; width:90%; max-width:400px; text-align:center; border:2px solid #ef4444; color:white; }
+    <style>
+        /* --- TAB SYSTEM STYLES --- */
+        .tab-nav-bar { display:flex; gap:10px; margin-bottom:20px; background:#1e293b; padding:10px; border-radius:10px; border:1px solid #334155; }
+        .nav-tab-btn { flex:1; padding:12px; border:none; background:transparent; color:#94a3b8; font-weight:bold; cursor:pointer; border-radius:6px; transition:all 0.2s; font-size: 1rem; }
+        .nav-tab-btn.active { background:#3b82f6; color:white; box-shadow:0 4px 6px rgba(0,0,0,0.2); }
+        .nav-tab-btn:hover:not(.active) { background:#334155; }
+        .tab-content { display: none; animation: fadeIn 0.3s; }
+        @keyframes fadeIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); }}
+
+        /* --- SCANNER STYLES --- */
+        #reader-container { width:100%; height:300px; background:black; border-radius:8px; overflow:hidden; margin-bottom:15px; border:2px solid #334155; position:relative; }
+        .scan-grid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px; }
+        .mode-btn { padding:15px; background:#0f172a; border:1px solid #334155; color:#cbd5e1; border-radius:8px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:5px; transition:0.2s; }
+        .mode-btn.active { border-color:#3b82f6; background:#1e293b; color:white; box-shadow: 0 0 10px rgba(59,130,246,0.3); }
+        .mode-btn i { font-size:1.5rem; margin-bottom:5px; }
+
+        /* --- MODAL STYLES (Aus Backup wiederhergestellt) --- */
+        .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; justify-content:center; align-items:center; }
+        .modal-overlay.active { display:flex; }
+        .modal-box { background:#1e293b; padding:25px; border-radius:12px; width:95%; max-width:500px; color:white; border:1px solid #475569; position:relative; }
+        
+        /* Crop Modal Spezifisch */
+        .crop-container { height: 60vh; background: #000; overflow: hidden; position: relative; }
     </style>
 </head>
 <body>
@@ -36,120 +43,182 @@
     <div class="main-content">
         
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
-            <h1>📦 Lagerbestand</h1>
-            <div style="font-size:0.8rem; color:#94a3b8; text-align:right;">
+            <h1>📦 Lagerverwaltung</h1>
+            <div style="text-align:right; font-size:0.85rem; color:#94a3b8;">
                 <span id="stat-total">0</span> Artikel<br>
                 <span id="stat-total-value">0,00 €</span> (EK)
             </div>
         </div>
 
-        <div class="scan-controls">
-            <div style="display:flex; margin-bottom:15px; border-radius:6px; overflow:hidden;">
-                <button onclick="window.ScanCtrl.setMode('search')" id="mode-search" class="mode-btn active">
-                    <i class="fas fa-search"></i> Suche
-                </button>
-                <button onclick="window.ScanCtrl.setMode('sell')" id="mode-sell" class="mode-btn mode-btn-sell">
-                    <i class="fas fa-shopping-cart"></i> Verkauf
-                </button>
-                <button onclick="window.ScanCtrl.setMode('inventory')" id="mode-inventory" class="mode-btn mode-btn-inv">
-                    <i class="fas fa-boxes"></i> Inventur
-                </button>
-                <button onclick="window.ScanCtrl.setMode('insert')" id="mode-insert" class="mode-btn mode-btn-add">
-                    <i class="fas fa-plus"></i> Inserieren
-                </button>
-            </div>
-
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                <div style="flex-grow:1; display:flex; gap:5px; min-width:200px;">
-                    <input type="text" id="main-scan-input" placeholder="EAN / Code scannen oder tippen..." 
-                           style="width:100%; padding:12px; border-radius:6px; border:1px solid #475569; background:#0f172a; color:white; font-size:1.1rem;">
-                    <button onclick="window.ScanCtrl.triggerManual()" class="btn-secondary" style="padding:0 15px;">
-                        <i class="fas fa-arrow-right"></i>
-                    </button>
-                </div>
-
-                <div style="display:flex; gap:10px; width:100%; md:width:auto;">
-                    <button onclick="window.ScanCtrl.startQR()" class="btn-primary" style="flex:1; background:#3b82f6; color:white;">
-                        <i class="fas fa-qrcode"></i> Scan
-                    </button>
-                    <button onclick="window.ScanCtrl.triggerOCR()" class="btn-primary" style="flex:1; background:#8b5cf6; color:white;">
-                        <i class="fas fa-camera"></i> Foto (OCR)
-                    </button>
-                </div>
-                
-                <input type="file" id="global-cam-input" accept="image/*" capture="environment" style="display:none;">
-            </div>
-        </div>
-
-        <div style="margin-bottom:20px; display:flex; gap:10px;">
-            <input type="text" id="inp-search" onkeyup="window.View.filterStock()" placeholder="🔍 Liste lokal filtern..." 
-                   style="flex:1; padding:10px; border-radius:6px; border:1px solid #334155; background:#1e293b; color:white;">
-            <button onclick="window.openCreateModal()" class="btn-primary" style="background:#2563eb; color:white; padding:10px 20px; border:none; border-radius:6px; cursor:pointer;">
-                + Neu
+        <div class="tab-nav-bar">
+            <button id="btn-tab-stock" class="nav-tab-btn active" onclick="window.switchTab('tab-stock')">
+                <i class="fas fa-list"></i> Bestand
+            </button>
+            <button id="btn-tab-scan" class="nav-tab-btn" onclick="window.switchTab('tab-scan')">
+                <i class="fas fa-qrcode"></i> Terminal
             </button>
         </div>
 
-        <div class="table-wrapper" style="overflow-x: auto; background:#1e293b; border-radius:8px; border:1px solid #334155;">
-            <table style="width:100%; border-collapse:collapse; color:white; min-width:600px;">
-                <thead>
-                    <tr style="background:#0f172a; border-bottom:1px solid #334155; text-align:left;">
-                        <th style="padding:15px; color:#94a3b8;">Artikel / Name</th>
-                        <th style="padding:15px; color:#94a3b8;">Ort</th>
-                        <th style="padding:15px; color:#94a3b8;">Menge</th>
-                        <th style="padding:15px; color:#94a3b8;">Preis (EK)</th>
-                        <th style="padding:15px; color:#94a3b8;">Markt</th>
-                        <th style="padding:15px; color:#94a3b8;">Status</th>
-                        <th style="padding:15px; text-align:right; color:#94a3b8;">Aktionen</th>
-                    </tr>
-                </thead>
-                <tbody id="stock-body">
-                    <tr>
-                        <td colspan="7" style="text-align:center; padding:50px; color:#94a3b8;">
-                            <div class="spinner"></div><br>Lade Daten...
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="sell-modal">
-        <div class="sell-box">
-            <h2 style="margin-top:0;">🛒 Artikel verkaufen</h2>
-            <div id="sell-preview" style="margin:20px 0; font-size:1.1rem; color:#cbd5e1;"></div>
+        <div id="tab-stock" class="tab-content" style="display:block;">
             
-            <div style="font-size:3rem; font-weight:bold; margin-bottom:20px; color:#ef4444;">
+            <div style="margin-bottom:15px; display:flex; gap:10px;">
+                <input type="text" id="inp-search" onkeyup="window.View.filterStock()" placeholder="🔍 Schnellfilter (Name, SKU, Ort)..." 
+                       style="flex:1; padding:12px; background:#1e293b; border:1px solid #334155; color:white; border-radius:8px;">
+                
+                <button onclick="window.openCreateModal()" class="btn-primary" title="Neuen Artikel anlegen"
+                        style="background:#10b981; border:none; padding:0 25px; border-radius:8px; cursor:pointer; color:white; font-size:1.2rem;">
+                    <i class="fas fa-plus"></i>
+                </button>
+            </div>
+
+            <div class="table-wrapper" style="background:#1e293b; border-radius:8px; border:1px solid #334155; overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; color:white; min-width:600px;">
+                    <thead>
+                        <tr style="background:#0f172a; border-bottom:1px solid #334155; text-align:left;">
+                            <th style="padding:12px;">Artikel</th>
+                            <th style="padding:12px;">Ort</th>
+                            <th style="padding:12px;">Menge</th>
+                            <th style="padding:12px;">Preis</th>
+                            <th style="padding:12px;">Status</th>
+                            <th style="padding:12px; text-align:right;">Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-body">
+                        <tr><td colspan="6" style="padding:40px; text-align:center;">Lade Daten...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="tab-scan" class="tab-content">
+            
+            <div style="display:flex; gap:15px; flex-wrap:wrap;">
+                
+                <div style="flex:1; min-width:300px;">
+                    <div id="reader-container"></div>
+                    
+                    <div style="display:flex; gap:10px; margin-top:10px;">
+                        <input type="text" id="terminal-input" placeholder="Scan oder Code eingeben..." 
+                               style="flex:1; padding:15px; font-size:1.1rem; background:#0f172a; border:1px solid #334155; color:white; border-radius:8px;">
+                        <button onclick="window.ScanCtrl.triggerManual()" style="padding:0 20px; background:#3b82f6; border:none; border-radius:8px; color:white; font-size:1.2rem; cursor:pointer;">
+                            <i class="fas fa-arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <button onclick="window.ScanCtrl.triggerOCR()" style="width:100%; margin-top:10px; padding:12px; background:#475569; color:white; border:none; border-radius:8px; cursor:pointer;">
+                        <i class="fas fa-camera"></i> Foto scannen (OCR)
+                    </button>
+                    <input type="file" id="global-cam-input" accept="image/*" capture="environment" style="display:none;">
+                </div>
+
+                <div style="flex:1; min-width:300px;">
+                    
+                    <h3 style="margin-top:0; color:#94a3b8; font-size:0.9rem; text-transform:uppercase;">Modus wählen</h3>
+                    
+                    <div class="scan-grid">
+                        <button id="mode-search" class="mode-btn active" onclick="window.ScanCtrl.setMode('search')">
+                            <i class="fas fa-search" style="color:#3b82f6;"></i>
+                            <span>Suche</span>
+                        </button>
+                        
+                        <button id="mode-sell" class="mode-btn" onclick="window.ScanCtrl.setMode('sell')">
+                            <i class="fas fa-shopping-cart" style="color:#ef4444;"></i>
+                            <span>Verkauf (-1)</span>
+                        </button>
+
+                        <button id="mode-inventory" class="mode-btn" onclick="window.ScanCtrl.setMode('inventory')">
+                            <i class="fas fa-clipboard-check" style="color:#10b981;"></i>
+                            <span>Inventur</span>
+                        </button>
+
+                        <button id="mode-insert" class="mode-btn" onclick="window.ScanCtrl.setMode('insert')">
+                            <i class="fas fa-plus-circle" style="color:#f59e0b;"></i>
+                            <span>Neu+</span>
+                        </button>
+                    </div>
+
+                    <div id="price-results" style="margin-top:20px;"></div>
+                </div>
+            </div>
+        </div>
+
+    </div> <%- include('partials/lager_modals') %>
+    <%- include('partials/match_modals') %>
+
+    <div id="sell-modal" class="modal-overlay">
+        <div class="modal-box" style="text-align:center;">
+            <h2 style="color:#ef4444; margin-top:0;"><i class="fas fa-shopping-cart"></i> Verkauf bestätigen</h2>
+            <div id="sell-preview" style="margin:20px 0; background:#0f172a; padding:15px; border-radius:8px; text-align:left;"></div>
+            
+            <div style="font-size:2.5rem; font-weight:bold; margin-bottom:20px; color:#ef4444;">
                 -1 <span style="font-size:1rem; color:#94a3b8;">Stück</span>
             </div>
 
             <div style="display:flex; gap:10px; justify-content:center;">
                 <button onclick="document.getElementById('sell-modal').classList.remove('active')" 
-                        style="padding:12px 20px; border-radius:6px; border:none; background:#475569; color:white; cursor:pointer;">
+                        style="padding:12px 20px; border-radius:6px; border:none; background:#334155; color:white; cursor:pointer;">
                     Abbrechen
                 </button>
                 <button id="btn-confirm-sell" 
-                        style="padding:12px 20px; border-radius:6px; border:none; background:#ef4444; color:white; font-weight:bold; cursor:pointer;">
+                        style="padding:12px 30px; border-radius:6px; border:none; background:#ef4444; color:white; font-weight:bold; cursor:pointer;">
                     Verkaufen
                 </button>
             </div>
         </div>
     </div>
 
-    <%- include('partials/lager_modals') %>
+    <div id="crop-modal" class="modal-overlay" style="z-index: 10000;">
+        <div class="modal-box" style="max-width:90vw; height:90vh; display:flex; flex-direction:column; padding:0;">
+            <div style="padding:15px; background:#0f172a; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155;">
+                <span style="font-weight:bold;">Bild zuschneiden</span>
+                <button onclick="document.getElementById('crop-modal').classList.remove('active')" style="background:none; border:none; color:white; font-size:1.5rem;">&times;</button>
+            </div>
+            <div class="crop-container" style="flex:1; background:black; position:relative;">
+                <img id="image-to-crop" style="max-width:100%;">
+            </div>
+            <div style="padding:15px; background:#0f172a; text-align:right; border-top:1px solid #334155;">
+                <button id="btn-ocr-confirm" onclick="window.ScanCtrl.performOCRUpload()" 
+                        style="background:#3b82f6; color:white; border:none; padding:10px 25px; border-radius:6px; font-weight:bold;">
+                    Text scannen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="print-modal" class="modal-overlay">
+        <div class="modal-box" style="width:320px; background:white; color:black;">
+            <h2 style="margin-top:0; color:black;">Etikett drucken</h2>
+            
+            <div id="print-area" style="border:2px dashed #ccc; padding:15px; margin-bottom:15px; text-align:center;">
+                <img id="print-qr" style="width:120px; height:120px;">
+                <div id="print-title" style="font-weight:bold; margin:10px 0; font-size:1.1rem;"></div>
+                <div id="print-sku" style="font-family:monospace; color:#555;"></div>
+            </div>
+            
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <button onclick="window.printLabel()" style="background:black; color:white; border:none; padding:12px; border-radius:6px; cursor:pointer; font-weight:bold;">
+                    🖨️ Jetzt Drucken
+                </button>
+                <button onclick="document.getElementById('print-modal').classList.remove('active')" style="background:#eee; color:black; border:none; padding:10px; border-radius:6px; cursor:pointer;">
+                    Schließen
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 
     <script src="/js/lager/view.js"></script>
     <script src="/js/lager/printer.js"></script>
-    <script src="/js/lager/controller-core.js"></script>   
-    <script src="/js/lager/controller-search.js"></script> 
-    <script src="/js/lager/controller-match.js"></script>  
-    <script src="/js/lager/controller-stock.js"></script>  
+    <script src="/js/lager/scanner.js"></script>
     
-    <script src="/js/lager/controller-scan.js"></script>   
+    <script src="/js/lager/controller-core.js"></script>
+    <script src="/js/lager/controller-search.js"></script>
+    <script src="/js/lager/controller-match.js"></script>
+    <script src="/js/lager/controller-stock.js"></script>
+    <script src="/js/lager/controller-scan.js"></script>
 
     <script src="/js/lager/main.js"></script>
 
