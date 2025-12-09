@@ -1,19 +1,19 @@
 // public/js/lager/controller-scan.js
-console.log("🚀 SCAN CONTROLLER V11 (Connected)");
+console.log("🚀 SCAN CONTROLLER V13 (Router Mode)");
 
 window.ScanCtrl = {
-    currentMode: 'search', 
+    currentMode: 'search', // Modus: search | sell | inventory | insert
     cropper: null,         
     lastCode: null,        
 
-    // --- LIFECYCLE ---
+    // --- LIFECYCLE (Wird beim Tab-Wechsel aufgerufen) ---
     onTabShow: function() {
         console.log("👁️ Scan-Tab aktiv");
         this.initOCRListener();
         this.startQR();
         
-        // Input Fokus
-        setTimeout(() => {
+        // Fokus auf Input setzen
+        setTimeout(() => { 
             const el = document.getElementById('terminal-input');
             if(el) el.focus();
         }, 200);
@@ -24,148 +24,107 @@ window.ScanCtrl = {
         this.stopQR();
     },
 
-    initOCRListener: function() {
-        const fileInput = document.getElementById('global-cam-input');
-        if(fileInput && !fileInput.dataset.init) {
-            fileInput.dataset.init = "true";
-            fileInput.addEventListener('change', (e) => this.handleImageSelect(e));
-        }
-    },
-
-    // --- MODI ---
+    // --- MODUS WAHL ---
     setMode: function(mode) {
         this.currentMode = mode;
+        
+        // Buttons umschalten (Visuell)
         document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
         const btn = document.getElementById(`mode-${mode}`);
         if(btn) btn.classList.add('active');
 
-        // Placeholder Logik
+        // Placeholder Text anpassen
         const inp = document.getElementById('terminal-input');
         if(inp) {
             inp.value = '';
             inp.focus();
-            if(mode === 'insert') inp.placeholder = "Neu+: Code scannen oder Name tippen...";
-            else if(mode === 'sell') inp.placeholder = "Verkauf: Code scannen...";
-            else inp.placeholder = "Code scannen...";
-        }
-    },
-
-    // --- SCANNER ---
-    startQR: function() {
-        if(window.ScannerModule) {
-            window.ScannerModule.startCamera('reader-container', (code) => {
-                this.handleScanInput(code, 'qr');
-            });
-        }
-    },
-
-    stopQR: function() {
-        if(window.ScannerModule) window.ScannerModule.stopCamera();
-    },
-
-    // --- OCR ---
-    triggerOCR: function() {
-        const el = document.getElementById('global-cam-input');
-        if(el) el.click();
-        else console.error("Element #global-cam-input fehlt in lager.ejs!");
-    },
-
-    handleImageSelect: function(e) {
-        if(e.target.files && e.target.files[0]) {
-            const r = new FileReader();
-            r.onload = (evt) => {
-                const imgEl = document.getElementById('image-to-crop');
-                const modal = document.getElementById('crop-modal');
-                
-                if(imgEl && modal) {
-                    imgEl.src = evt.target.result;
-                    modal.classList.add('active');
-                    
-                    if(this.cropper) this.cropper.destroy();
-                    this.cropper = new Cropper(imgEl, { viewMode: 1, autoCropArea: 0.8 });
-                }
+            const texts = {
+                'search': '🔍 Suche (Name, EAN)...',
+                'sell': '🛒 Verkauf scannen...',
+                'inventory': '📦 Inventur scannen...',
+                'insert': '➕ Neu scannen oder tippen...'
             };
-            r.readAsDataURL(e.target.files[0]);
+            inp.placeholder = texts[mode] || "Code scannen...";
         }
-        e.target.value = '';
+        
+        if(window.showToast) window.showToast(`Modus: ${mode.toUpperCase()}`, 'info');
     },
 
-    performOCRUpload: function() {
-        if(!this.cropper) return;
-        const btn = document.getElementById('btn-ocr-confirm');
-        if(btn) btn.innerText = "⏳ ...";
-
-        this.cropper.getCroppedCanvas().toBlob(async (blob) => {
-            const fd = new FormData();
-            fd.append('image', blob, 'scan.jpg');
-            
-            try {
-                // Mock oder Echter Call
-                const res = await fetch('/api/scan-image', { method:'POST', body:fd });
-                const data = await res.json();
-                
-                if(data.success && data.model) {
-                    this.handleScanInput(data.model, 'text'); // Als Text verarbeiten
-                    document.getElementById('crop-modal').classList.remove('active');
-                } else {
-                    window.showToast("Nichts erkannt", "error");
-                }
-            } catch(e) { console.error(e); window.showToast("OCR Fehler", "error"); }
-            
-            if(btn) btn.innerText = "Text scannen";
-        }, 'image/jpeg');
-    },
-
-    // --- INPUT HANDLER ---
+    // --- INPUT VERARBEITUNG ---
     triggerManual: function() {
         const inp = document.getElementById('terminal-input');
         if(inp && inp.value.trim()) {
             this.handleScanInput(inp.value.trim(), 'manual');
-            inp.value = '';
+            inp.value = ''; // Input leeren nach Absenden
         }
     },
 
     handleScanInput: function(code, source) {
-        console.log(`INPUT: ${code} (${source}) MODE: ${this.currentMode}`);
+        console.log(`⚡ INPUT: ${code} (${source}) MODE: ${this.currentMode}`);
         this.lastCode = code;
 
-        // INSERT SHORTCUT
+        // 1. NEU ANLEGEN (Shortcut) -> Sofort Modal öffnen
         if(this.currentMode === 'insert') {
             this.openInsertFlow(code, source);
             return;
         }
 
-        // SERVER CHECK
-        if(window.socket) window.socket.emit('check-scan', code);
+        // 2. SERVER CHECK (Für Search, Sell, Inventory)
+        if(window.socket) {
+            window.socket.emit('check-scan', code);
+        } else {
+            if(window.showToast) window.showToast("Keine Verbindung", "error");
+        }
     },
 
-    // --- ACTIONS ---
+    // --- ROUTER: SERVER ANTWORT VERTEILEN ---
     handleScanResponse: function(results) {
+        // Sicherheitscheck: Nur wenn Scan-Tab sichtbar ist
         if(document.getElementById('tab-scan').style.display === 'none') return false;
 
+        // A: Nichts gefunden
         if(!results || results.length === 0) {
             this.handleNotFound();
             return true;
         }
 
-        if(this.currentMode === 'search') return false; // Liste zeigen
+        // B: Such-Modus (Zeigt immer Liste, auch bei 1 Treffer)
+        if(this.currentMode === 'search') {
+            if(window.WorkflowSearch) window.WorkflowSearch.process(results);
+            else console.error("❌ WorkflowSearch fehlt!");
+            return true;
+        }
 
+        // C: Workflow (Verkauf / Inventur) -> Braucht EINDEUTIGEN Treffer
         if(results.length === 1) {
             const item = results[0];
-            if(this.currentMode === 'sell') this.openSellModal(item);
-            if(this.currentMode === 'inventory') this.openInventoryFlow(item);
-            return true;
+            
+            if(this.currentMode === 'sell') {
+                if(window.WorkflowSell) window.WorkflowSell.process(item);
+                else console.error("❌ WorkflowSell fehlt!");
+            } 
+            else if(this.currentMode === 'inventory') {
+                if(window.WorkflowInventory) window.WorkflowInventory.process(item);
+                else console.error("❌ WorkflowInventory fehlt!");
+            }
+            return true; // Erledigt
         } 
         
-        window.showToast("Mehrere Treffer. Bitte wählen.", "warning");
+        // D: Zu viele Treffer für Workflow -> Liste zeigen zur Auswahl
+        window.showToast(`⚠️ ${results.length} Treffer. Bitte präziser suchen.`, 'warning');
+        if(window.WorkflowSearch) window.WorkflowSearch.process(results);
+        
         return false;
     },
 
+    // --- HELPER & MODALS ---
     handleNotFound: function() {
+        this.playSound('error');
         const container = document.getElementById('price-results');
         if(container) {
             container.innerHTML = `
-                <div style="padding:20px; text-align:center; border:2px dashed #ef4444; border-radius:8px; color:#ef4444;">
+                <div style="padding:20px; text-align:center; border:2px dashed #ef4444; border-radius:8px; color:#ef4444; margin-top:20px;">
+                    <div style="font-size:2rem; margin-bottom:10px;">🤷‍♂️</div>
                     <h3>Nicht gefunden: "${this.lastCode}"</h3>
                     <button class="btn-primary" onclick="window.ScanCtrl.openInsertFlow('${this.lastCode}', 'manual')">
                         + Als Neu anlegen
@@ -177,44 +136,79 @@ window.ScanCtrl = {
     openInsertFlow: function(code, source) {
         if(window.openCreateModal) {
             window.openCreateModal(); // Leeres Modal
-            
             setTimeout(() => {
                 const t = document.getElementById('inp-title');
                 const s = document.getElementById('inp-sku');
-                
-                // Logik: Längerer Text -> Wahrscheinlich Titel (OCR), Kurzer -> SKU
-                if(source === 'text' || code.length > 15) {
-                    if(t) t.value = code;
-                } else {
-                    if(s) s.value = code;
-                }
+                // Logik: OCR/Lang -> Titel, Kurz -> SKU
+                if(source === 'text' || code.length > 15) { if(t) t.value = code; } 
+                else { if(s) s.value = code; }
             }, 300);
         }
     },
 
-    openSellModal: function(item) {
-        const modal = document.getElementById('sell-modal');
-        const prev = document.getElementById('sell-preview');
-        const btn = document.getElementById('btn-confirm-sell');
-        
-        if(modal && prev) {
-            prev.innerHTML = `<b>${item.title}</b><br>Bestand: ${item.qty || item.quantity}`;
-            modal.classList.add('active');
-            
-            // One-Time Listener
-            btn.onclick = () => {
-                if(window.socket) {
-                    const newQ = (parseInt(item.qty)||0) - 1;
-                    window.socket.emit('update-stock-item', {id: item.id || item._id, quantity: newQ});
-                    window.showToast("Verkauft!", "success");
-                }
-                modal.classList.remove('active');
-            };
+    // --- HARDWARE / OCR ---
+    startQR: function() {
+        if(window.ScannerModule) {
+            window.ScannerModule.startCamera('reader-container', (code) => {
+                this.handleScanInput(code, 'qr');
+            });
         }
     },
-
-    openInventoryFlow: function(item) {
-        if(window.openCreateModal) window.openCreateModal(item.id || item._id);
+    stopQR: function() {
+        if(window.ScannerModule) window.ScannerModule.stopCamera();
+    },
+    
+    // OCR Init & Trigger
+    triggerOCR: function() {
+        const el = document.getElementById('global-cam-input');
+        if(el) el.click();
+    },
+    initOCRListener: function() {
+        const el = document.getElementById('global-cam-input');
+        if(el && !el.dataset.init) {
+            el.dataset.init="true";
+            el.addEventListener('change', (e) => this.handleImageSelect(e));
+        }
+    },
+    handleImageSelect: function(e) { 
+        if(e.target.files && e.target.files[0]) {
+            const r = new FileReader();
+            r.onload = (evt) => {
+                const img = document.getElementById('image-to-crop');
+                const m = document.getElementById('crop-modal');
+                if(img && m) { 
+                    img.src=evt.target.result; 
+                    m.classList.add('active'); 
+                    if(this.cropper) this.cropper.destroy();
+                    this.cropper = new Cropper(img, {viewMode:1, autoCropArea:0.8}); 
+                }
+            };
+            r.readAsDataURL(e.target.files[0]);
+        }
+        e.target.value='';
+    },
+    performOCRUpload: function() { 
+        if(!this.cropper) return;
+        const btn = document.getElementById('btn-ocr-confirm');
+        if(btn) btn.innerText = "⏳ ...";
+        this.cropper.getCroppedCanvas().toBlob(async (blob) => {
+            const fd = new FormData(); fd.append('image', blob, 'scan.jpg');
+            try {
+                const res = await fetch('/api/scan-image', {method:'POST', body:fd});
+                const data = await res.json();
+                if(data.success && data.model) {
+                    this.handleScanInput(data.model, 'text');
+                    document.getElementById('crop-modal').classList.remove('active');
+                } else { window.showToast("Nichts erkannt", "error"); }
+            } catch(e) { console.error(e); }
+            if(btn) btn.innerText = "Text scannen";
+        });
+    },
+    playSound: function(type) {
+        const audio = new Audio('/sounds/notification.mp3');
+        if(type==='cash') audio.playbackRate=1.5;
+        audio.play().catch(e=>{});
+        if(navigator.vibrate) navigator.vibrate(type==='error'?[50,50,50]:100);
     }
 };
 

@@ -12,7 +12,39 @@ window.triggerManualScan = function() {
 
 window.filterStock = function() {
     // Einfache Client-Side Suche
-    const term = document.getElementById('inp-search').value.toLowerCase();
+    const term = document.ge// public/js/lager/workflow-inventory.js
+console.log("📦 Workflow INVENTORY geladen");
+
+window.WorkflowInventory = {
+    process: function(item) {
+        if (!item) return;
+        console.log("📦 Starte Inventur-Workflow für:", item.title);
+
+        // Wir nutzen das existierende Bearbeiten-Modal aus controller-stock.js
+        if (window.openCreateModal) {
+            
+            // Scanner kurz pausieren, damit er nicht im Hintergrund weiter scannt
+            if(window.ScanCtrl && window.ScanCtrl.stopQR) window.ScanCtrl.stopQR();
+            
+            // Modal mit Item-ID öffnen
+            window.openCreateModal(item.id || item._id);
+            
+            // Spezial-Logik: Fokus direkt auf das Mengen-Feld setzen
+            setTimeout(() => {
+                const qtyField = document.getElementById('inp-qty');
+                if(qtyField) {
+                    qtyField.focus();
+                    qtyField.select(); // Inhalt markieren, damit man direkt überschreiben kann
+                }
+                
+                // Hinweis anzeigen
+                if(window.showToast) window.showToast("Inventur: Bitte Menge prüfen", "info");
+            }, 300);
+        } else {
+            console.error("❌ window.openCreateModal fehlt! Ist controller-stock.js geladen?");
+        }
+    }
+};tElementById('inp-search').value.toLowerCase();
     if(!window.lastStockItems) return;
 
     const filtered = window.lastStockItems.filter(item => 
